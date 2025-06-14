@@ -9,7 +9,7 @@ import seaborn as sns
 # -------------------------
 # Upload Dataset
 # -------------------------
-st.title("📊 Film Clustering App with Elbow & Silhouette")
+st.title("📊 Film Clustering App")
 
 uploaded_file = st.file_uploader("Upload CSV Data Film", type="csv")
 
