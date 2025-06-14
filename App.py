@@ -53,7 +53,7 @@ if uploaded_file:
 
         # Tabel film mirip: Tampilkan semua film di cluster yang sama
         st.subheader("📃 Daftar Film dan Clusternya")
-        st.dataframe(df_filtered[['Title', 'Genre', 'Rating', 'Duration', 'Cluster']])
+        st.dataframe(df_filtered[['Movie_Title', 'Genre', 'Rating', 'Duration', 'Cluster']])
 
         # Opsi download
         csv = df_filtered.to_csv(index=False).encode('utf-8')
