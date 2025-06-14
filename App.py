@@ -1,65 +1,121 @@
+# app.py
 import streamlit as st
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.cluster import KMeans
-import seaborn as sns
 import matplotlib.pyplot as plt
+import seaborn as sns
 
-st.title("🎬 Film Clustering App")
-st.write("Upload dataset film, atur parameter, lihat cluster, dan dapatkan list film serupa berdasarkan cluster.")
+# -------------------------
+# Judul & Deskripsi
+# -------------------------
+st.title("Film Clustering App")
+st.write("""
+Aplikasi ini mengelompokkan film berdasarkan **Genre**, **Rating**, dan **Durasi**.
+Gunakan slider dan filter untuk menyesuaikan jumlah cluster dan data.
+""")
 
-# Upload file
-uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
+# -------------------------
+# Upload Dataset
+# -------------------------
+uploaded_file = st.file_uploader("Upload CSV Data Film", type="csv")
 
-if uploaded_file:
+if uploaded_file is not None:
+    # Load data
     df = pd.read_csv(uploaded_file)
-    st.write("Kolom:", df.columns.tolist())
+    st.write("### Data Asli", df.head())
 
-    # Slider
-    k = st.slider("Jumlah Cluster (k)", 2, 10, 3)
-    min_rating, max_rating = st.slider("Rentang Rating", 0.0, 10.0, (0.0, 10.0))
-    min_duration, max_duration = st.slider("Rentang Durasi (menit)", 0, 300, (0, 300))
+    # -------------------------
+    # Filter & Parameter
+    # -------------------------
+    k = st.sidebar.slider("Jumlah Cluster (k)", min_value=2, max_value=10, value=3)
+    min_rating = st.sidebar.slider("Minimum Rating", min_value=0.0, max_value=10.0, value=0.0)
+    max_rating = st.sidebar.slider("Maksimum Rating", min_value=0.0, max_value=10.0, value=10.0)
+    min_duration = st.sidebar.slider("Minimum Durasi (menit)", min_value=0, max_value=300, value=0)
+    max_duration = st.sidebar.slider("Maksimum Durasi (menit)", min_value=0, max_value=300, value=300)
 
-    # Filter data
-    df_filtered = df[
-        (df['Rating'] >= min_rating) &
-        (df['Rating'] <= max_rating) &
-        (df['Duration'] >= min_duration) &
-        (df['Duration'] <= max_duration)
-    ]
+    # Apply filter
+    df_filtered = df[(df['Rating'] >= min_rating) & (df['Rating'] <= max_rating) &
+                     (df['Duration'] >= min_duration) & (df['Duration'] <= max_duration)]
 
-    if df_filtered.empty:
-        st.warning("Data kosong setelah filter! Coba atur slider.")
-    else:
-        # Encode Genre
-        le = LabelEncoder()
-        df_filtered['Genre_encoded'] = le.fit_transform(df_filtered['Genre'])
+    st.write(f"### Data setelah filter ({len(df_filtered)} film)", df_filtered.head())
 
-        # Clustering
-        features = df_filtered[['Genre_encoded', 'Rating', 'Duration']]
-        kmeans = KMeans(n_clusters=k, random_state=42)
-        clusters = kmeans.fit_predict(features)
-        df_filtered['Cluster'] = clusters
+    # -------------------------
+    # Preprocessing
+    # -------------------------
+    le = LabelEncoder()
+    df_filtered['Genre_encoded'] = le.fit_transform(df_filtered['Genre'])
 
-        # Plot
-        fig, ax = plt.subplots()
-        sns.scatterplot(
-            data=df_filtered,
-            x='Rating', y='Duration',
-            hue='Cluster', palette='tab10',
-            ax=ax
-        )
-        st.pyplot(fig)
+    features = df_filtered[['Genre_encoded', 'Rating', 'Duration']]
+    scaler = StandardScaler()
+    scaled_features = scaler.fit_transform(features)
 
-        # Tabel film mirip: Tampilkan semua film di cluster yang sama
-        st.subheader("📃 Daftar Film dan Clusternya")
-        st.dataframe(df_filtered[['Movie_Title', 'Genre', 'Rating', 'Duration', 'Cluster']])
+    # -------------------------
+    # Clustering
+    # -------------------------
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    clusters = kmeans.fit_predict(scaled_features)
+    df_filtered['Cluster'] = clusters
 
-        # Opsi download
-        csv = df_filtered.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            "💾 Download Hasil Clustering",
-            data=csv,
-            file_name='clustering_result.csv',
-            mime='text/csv'
-        )
+    st.write("### Data dengan Cluster", df_filtered)
+
+    # -------------------------
+    # Plot Cluster
+    # -------------------------
+    st.write("### Visualisasi Cluster (Rating vs Duration)")
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(
+        x='Rating',
+        y='Duration',
+        hue='Cluster',
+        data=df_filtered,
+        palette='viridis'
+    )
+    st.pyplot(plt.gcf())
+
+    # -------------------------
+    # Statistik Cluster
+    # -------------------------
+    st.write("### Statistik Tiap Cluster")
+    cluster_summary = df_filtered.groupby('Cluster').agg({
+        'Genre': lambda x: x.mode()[0],
+        'Rating': 'mean',
+        'Duration': 'mean',
+        'Cluster': 'count'
+    }).rename(columns={'Genre': 'Genre Dominan', 'Rating': 'Rating Rata-rata',
+                       'Duration': 'Durasi Rata-rata', 'Cluster': 'Jumlah Film'})
+    st.write(cluster_summary)
+
+# -------------------------
+# Film Berdasarkan Cluster
+# -------------------------
+st.write("### 📃 Daftar Film Berdasarkan Cluster")
+
+# Misal user mau pilih cluster mana yang mau ditampilkan detailnya
+selected_cluster = st.selectbox(
+    "Pilih Nomor Cluster untuk lihat detail filmnya",
+    sorted(df_filtered['Cluster'].unique())
+)
+
+# Filter semua film di cluster itu
+recommended = df_filtered[df_filtered['Cluster'] == selected_cluster]
+
+st.write(f"**Film di Cluster {selected_cluster}**:")
+st.dataframe(recommended[['Movie_Title', 'Genre', 'Rating', 'Duration']])
+
+
+    # -------------------------
+    # Download Hasil
+    # -------------------------
+    st.write("### Download Data Hasil Clustering")
+    csv = df_filtered.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name='film.csv',
+        mime='text/csv'
+    )
+
+else:
+    st.info("Silakan upload file CSV terlebih dahulu.")
+
