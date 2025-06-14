@@ -2,13 +2,15 @@ import streamlit as st
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 
 # -------------------------
 # Upload Dataset
 # -------------------------
+st.title("📊 Film Clustering App with Elbow & Silhouette")
+
 uploaded_file = st.file_uploader("Upload CSV Data Film", type="csv")
 
 if uploaded_file is not None:
@@ -29,19 +31,40 @@ if uploaded_file is not None:
     ]
     st.write(f"### Data setelah filter ({len(df_filtered)} film)", df_filtered.head())
 
-    # === Preprocessing & Clustering ===
+    # === Preprocessing ===
     le = LabelEncoder()
     df_filtered['Genre_encoded'] = le.fit_transform(df_filtered['Genre'])
     scaler = StandardScaler()
     features = df_filtered[['Genre_encoded', 'Rating', 'Duration']]
     scaled_features = scaler.fit_transform(features)
+
+    # === Elbow Method ===
+    st.write("### 📈 Elbow Method")
+    inertia = []
+    k_range = range(1, 11)
+    for i in k_range:
+        km = KMeans(n_clusters=i, random_state=42)
+        km.fit(scaled_features)
+        inertia.append(km.inertia_)
+
+    fig, ax = plt.subplots()
+    ax.plot(k_range, inertia, marker='o')
+    ax.set_xlabel('Jumlah Cluster (k)')
+    ax.set_ylabel('Inertia')
+    ax.set_title('Elbow Method')
+    st.pyplot(fig)
+
+    # === Clustering ===
     kmeans = KMeans(n_clusters=k, random_state=42)
     clusters = kmeans.fit_predict(scaled_features)
     df_filtered['Cluster'] = clusters
-    st.write("### Data dengan Cluster", df_filtered)
 
-    # === Plot ===
-    st.write("### Visualisasi Cluster (Rating vs Duration)")
+    # === Silhouette Score ===
+    sil_score = silhouette_score(scaled_features, clusters)
+    st.write(f"### 🏷️ Silhouette Score untuk k = {k} : **{sil_score:.4f}**")
+
+    # === Visualisasi Cluster ===
+    st.write("### 🎨 Visualisasi Cluster (Rating vs Duration)")
     plt.figure(figsize=(10, 6))
     sns.scatterplot(
         x='Rating',
@@ -53,7 +76,7 @@ if uploaded_file is not None:
     st.pyplot(plt.gcf())
 
     # === Statistik Cluster ===
-    st.write("### Statistik Tiap Cluster")
+    st.write("### 📊 Statistik Tiap Cluster")
     cluster_summary = df_filtered.groupby('Cluster').agg({
         'Genre': lambda x: x.mode()[0],
         'Rating': 'mean',
@@ -78,12 +101,12 @@ if uploaded_file is not None:
     st.dataframe(recommended[['Movie_Title', 'Genre', 'Rating', 'Duration']])
 
     # === Download Button ===
-    st.write("### Download Data Hasil Clustering")
+    st.write("### ⬇️ Download Data Hasil Clustering")
     csv = df_filtered.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="Download CSV",
         data=csv,
-        file_name='film.csv',
+        file_name='film_clustered.csv',
         mime='text/csv'
     )
 
